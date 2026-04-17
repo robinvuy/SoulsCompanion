@@ -32,6 +32,25 @@ app.get('/bosses', (req,res) => {
     res.json(bosses)
 });
 
+app.get('/bosses/:id', (req,res) => {
+    const bossId  = Number(req.params.id);
+
+    if  (isNaN(bossId)) {
+        return res.send("Invalid Boss Id")
+    }
+
+    bossData = bosses.find(boss => boss.id === bossId)
+
+    if (!bossData) {
+        return res.send("Boss Not Found")
+
+    }
+
+    res.json(bossData) 
+
+    
+});
+
 app.listen(port, () => { 
     console.log(`Server is listening at http://localhost:${port}`)
 });
