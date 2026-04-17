@@ -29,7 +29,17 @@ app.get('/', (req,res) => {
 });
 
 app.get('/bosses', (req,res) => {
-    res.json(bosses)
+    const game = (req.query.game)
+    
+    bossData = bosses.filter(boss => boss.game == game)
+
+    if (!game) {return res.json(bosses)};
+
+
+    if (game) {
+        return res.json(bossData)
+    };
+
 });
 
 app.get('/bosses/:id', (req,res) => {
@@ -50,6 +60,9 @@ app.get('/bosses/:id', (req,res) => {
 
     
 });
+
+
+
 
 app.listen(port, () => { 
     console.log(`Server is listening at http://localhost:${port}`)
