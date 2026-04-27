@@ -105,8 +105,28 @@ app.post('/bosses', (req,res) => {
     bosses.push(newBoss);
 
     res.json(newBoss)
+});
 
+app.put('/bosses/:id', (req,res) => {
+    const bossId  = Number(req.params.id);
+    
+    const bossData = bosses.find(boss => boss.id === bossId);
 
+    if (bossData === undefined) {
+        return res.send("Could Not Find Boss")
+    };
+
+    if (!req.body.name && !req.body.game && !req.body.difficulty ) {
+        return res.send("Boss Details Incomplete")
+    } else if ( typeof req.body.difficulty === 'string') {
+        return res.send("Difficulty Must Be a Number")
+    };
+
+    if (req.body.name) { bossData.name = req.body.name }
+    if (req.body.game) { bossData.game = req.body.game }
+    if (req.body.difficulty) { bossData.difficulty = req.body.difficulty }
+
+    res.json(bossData)
 });
 
 
