@@ -3,6 +3,8 @@ const express = require('express');
 const app = express();
 const port = 8080;
 
+app.use(express.json());
+
 const bosses = [
     { 
         id: 1,
@@ -86,6 +88,26 @@ app.get('/bosses/:id', (req,res) => {
     
 });
 
+app.post('/bosses', (req,res) => {
+    
+    if (req.body.name == null || req.body.game == null || req.body.difficulty == null) {
+        return res.send("Incomplete Boss Data")
+    };
+    
+    const newBoss = { 
+        id: bosses.length + 1,
+        name: req.body.name,
+        game: req.body.game,
+        difficulty: req.body.difficulty
+    };
+
+
+    bosses.push(newBoss);
+
+    res.json(newBoss)
+
+
+});
 
 
 
