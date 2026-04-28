@@ -129,6 +129,24 @@ app.put('/bosses/:id', (req,res) => {
     res.json(bossData)
 });
 
+app.delete('/bosses/:id', (req,res) => {
+    const bossId = Number(req.params.id);
+
+    if (isNaN(bossId)) {
+        return res.send("Boss ID must be valid")
+    };
+
+    const bossIndex = bosses.findIndex(boss => boss.id === bossId);
+
+    if (bossIndex === -1) {
+        return res.send("Boss Does Not Exist")
+    };
+
+    const deletedBoss = bosses.splice(bossIndex, 1);
+
+    res.json(deletedBoss);
+})
+
 
 
 app.listen(port, () => { 
