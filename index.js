@@ -44,7 +44,15 @@ const bosses = [
 ]
 
 app.get('/', (req,res) => {
-    res.send("Hello souls player!")
+   // res.json({ "Success": "Hello Souls Player" })
+    //res.status(200)
+  
+
+    res.json({
+    status: "Success",
+    message: "Hello Souls Player"
+})
+
 });
 
 app.get('/bosses', (req,res) => {
@@ -73,13 +81,13 @@ app.get('/bosses/:id', (req,res) => {
     const bossId  = Number(req.params.id);
 
     if  (isNaN(bossId)) {
-        return res.send("Invalid Boss Id")
+        return res.status(400).json({ "error": "Invalid Boss Id" })
     };
 
-    bossData = bosses.find(boss => boss.id === bossId)
+    const bossData = bosses.find(boss => boss.id === bossId)
 
     if (!bossData) {
-        return res.send("Boss Not Found")
+        return res.status(404).json({ "error": "Boss Not Found" })
 
     }
 
@@ -91,11 +99,14 @@ app.get('/bosses/:id', (req,res) => {
 app.post('/bosses', (req,res) => {
     
     if (req.body.name == null || req.body.game == null || req.body.difficulty == null) {
-        return res.send("Incomplete Boss Data")
+        return res.status(400).json({ "error": "Incomplete Boss Data" })
     };
-    
+
+    const bossIds = bosses.map( boss => boss.id);
+    const maxId = Math.max(...bossIds)
+
     const newBoss = { 
-        id: bosses.length + 1,
+        id: (maxId + 1),
         name: req.body.name,
         game: req.body.game,
         difficulty: req.body.difficulty
@@ -104,7 +115,7 @@ app.post('/bosses', (req,res) => {
 
     bosses.push(newBoss);
 
-    res.json(newBoss)
+    res.status(201).json(newBoss)
 });
 
 app.put('/bosses/:id', (req,res) => {
@@ -113,18 +124,26 @@ app.put('/bosses/:id', (req,res) => {
     const bossData = bosses.find(boss => boss.id === bossId);
 
     if (bossData === undefined) {
-        return res.send("Could Not Find Boss")
+        return res.status(404).json({ "error": "Could Not Find Boss" })
     };
 
     if (!req.body.name && !req.body.game && !req.body.difficulty ) {
-        return res.send("Boss Details Incomplete")
-    } else if ( typeof req.body.difficulty === 'string') {
-        return res.send("Difficulty Must Be a Number")
-    };
+        return res.status(400).json({ "error": "Boss Details Incomplete" })
+    }; 
+    
+    if (req.body.difficulty !== undefined) {
+        if (typeof req.body.difficulty !== 'number') {
+            return res.status(400).json({ "error": "Difficulty Must Be a Number" })
+        }
+        if (req.body.difficulty < 1) {
+            return res.status(400).json({ "error": "Difficulty Must Be Higher than 0" })
+        }
+    }   
+
 
     if (req.body.name) { bossData.name = req.body.name }
     if (req.body.game) { bossData.game = req.body.game }
-    if (req.body.difficulty) { bossData.difficulty = req.body.difficulty }
+    if (req.body.difficulty !== undefined) { bossData.difficulty = req.body.difficulty }
 
     res.json(bossData)
 });
@@ -133,18 +152,18 @@ app.delete('/bosses/:id', (req,res) => {
     const bossId = Number(req.params.id);
 
     if (isNaN(bossId)) {
-        return res.send("Boss ID must be valid")
+        return res.status(400).json({ "error": "Boss ID must be valid"})
     };
 
     const bossIndex = bosses.findIndex(boss => boss.id === bossId);
 
     if (bossIndex === -1) {
-        return res.send("Boss Does Not Exist")
+        return res.status(404).json({ "error": "Boss Does Not Exist" })
     };
 
     const deletedBoss = bosses.splice(bossIndex, 1);
 
-    res.json(deletedBoss);
+    res.json(deletedBoss[0]);
 })
 
 
