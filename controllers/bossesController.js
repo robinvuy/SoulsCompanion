@@ -1,4 +1,5 @@
-const bosses = require('../data/bossesData')
+const bosses = require('../data/bossesData');
+const pool = require('../db/connection');
 
 
 const getHomepage = (req,res) => {
@@ -7,42 +8,60 @@ const getHomepage = (req,res) => {
     message: "Hello Souls Player"});
 };
 
-const getBoss = (req,res) => {
+const getBoss = async (req,res) => {
     const game = (req.query.game);
     const difficulty = (req.query.difficulty);
     const sort = (req.query.sort);
-    let bossData = bosses;
 
-    if (game) {
-        bossData = bossData.filter(boss => boss.game === game)
-    };
-    
-    if (difficulty) {
-        bossData = bossData.filter(boss => boss.difficulty == difficulty)
-    };
-    
-    if (sort) {
-        bossData = [...bossData].sort((a, b) => (b.difficulty - a.difficulty))
-    };
-
+    try {
+        const results = await pool.query('SELECT * FROM bosses');
+        const rows = results.rows
+        let bossData = rows
+        if (game) {
+            bossData = bossData.filter(boss => boss.game === game)
+        }; 
         
-    return res.json(bossData);
+        if (difficulty) {
+            bossData = bossData.filter(boss => boss.difficulty == difficulty)
+        };
+        
+        if (sort) {
+            bossData = [...bossData].sort((a, b) => (b.difficulty - a.difficulty))
+        };
+        
+        res.status(200).json(bossData);
+
+    } catch (error) {
+        throw error
+    }
+        
 };
 
-const getBossById = (req,res) => {
+const getBossById = async (req,res) => {
     const bossId  = Number(req.params.id);
 
-    if  (isNaN(bossId)) {
-        return res.status(400).json({ "error": "Invalid Boss Id" })
-    };
+    try {
+        const results = await pool.query(`SELECT * FROM bosses WHERE id = ${bossId}`)
+        const rows = results.rows
+        const data = rows
+       
+        if  (isNaN(bossId)) {
+            return res.status(400).json({ "error": "Invalid Boss Id" })
+        };
+        
+        
+        const bossData = data.find(boss => boss.id === bossId)
+    
+        if (!bossData) {
+            return res.status(404).json({ "error": "Boss Not Found" })
+        };
+    
+        res.json(bossData);
+        
+    } catch (error) {
+        throw error
+    }
 
-    const bossData = bosses.find(boss => boss.id === bossId)
-
-    if (!bossData) {
-        return res.status(404).json({ "error": "Boss Not Found" })
-    };
-
-    res.json(bossData);
 };
 
 const addBoss = (req,res) => {
