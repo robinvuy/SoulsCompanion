@@ -1,4 +1,3 @@
-const bosses = require('../data/bossesData');
 const pool = require('../db/connection');
 
 
@@ -41,7 +40,7 @@ const getBossById = async (req,res) => {
     const bossId  = Number(req.params.id);
 
     try {
-        const results = await pool.query(`SELECT * FROM bosses WHERE id = ${bossId}`)
+        const results = await pool.query('SELECT * FROM bosses WHERE id = $1', [ bossId ])
         const rows = results.rows
         const data = rows
        
@@ -50,13 +49,12 @@ const getBossById = async (req,res) => {
         };
         
         
-        const bossData = data.find(boss => boss.id === bossId)
     
-        if (!bossData) {
+        if (!data) {
             return res.status(404).json({ "error": "Boss Not Found" })
         };
     
-        res.json(bossData);
+        res.json(data);
         
     } catch (error) {
         throw error
@@ -64,72 +62,78 @@ const getBossById = async (req,res) => {
 
 };
 
-const addBoss = (req,res) => {
+const addBoss = async (req,res) => {
     if (req.body.name == null || req.body.game == null || req.body.difficulty == null) {
         return res.status(400).json({ "error": "Incomplete Boss Data" })
     };
 
-    const bossIds = bosses.map( boss => boss.id);
-    const maxId = Math.max(...bossIds)
-
-    const newBoss = { 
-        id: (maxId + 1),
-        name: req.body.name,
-        game: req.body.game,
-        difficulty: req.body.difficulty
-    };
-
-    bosses.push(newBoss);
-
-    res.status(201).json(newBoss);
+    const { name, game, difficulty } = req.body
+    try {
+        const results = await pool.query('INSERT into bosses (name, game, difficulty) VALUES ($1, $2, $3) RETURNING *', [name, game, difficulty])
+        const rows = results.rows
+        
+        res.status(201).json(rows);
+    }
+    catch (error) {
+        throw error
+    }
 };
 
-const updateBoss = (req,res) => {
+
+const updateBoss = async (req,res) => {
     const bossId  = Number(req.params.id);
+    const { name, game, difficulty } = req.body
     
-    const bossData = bosses.find(boss => boss.id === bossId);
+    try {
+        const results = await pool.query('UPDATE bosses SET name = $1, game = $2, difficulty = $3 WHERE id = $4 RETURNING *', [
+            name,
+            game,
+            difficulty,
+            bossId
+        ])
 
-    if (bossData === undefined) {
-        return res.status(404).json({ "error": "Could Not Find Boss" })
-    };
+        const rows = results.rows
 
-    if (!req.body.name && !req.body.game && !req.body.difficulty ) {
-        return res.status(400).json({ "error": "Boss Details Incomplete" })
-    }; 
+        if (rows === undefined) {
+            return res.status(404).json({ "error": "Could Not Find Boss" })
+        };
     
-    if (req.body.difficulty !== undefined) {
-        if (typeof req.body.difficulty !== 'number') {
-            return res.status(400).json({ "error": "Difficulty Must Be a Number" })
-        }
-        if (req.body.difficulty < 1) {
-            return res.status(400).json({ "error": "Difficulty Must Be Higher than 0" })
-        }
-    };   
+        if (!req.body.name && !req.body.game && !req.body.difficulty ) {
+            return res.status(400).json({ "error": "Boss Details Incomplete" })
+        }; 
+        
+        if (req.body.difficulty !== undefined) {
+            if (typeof req.body.difficulty !== 'number') {
+                return res.status(400).json({ "error": "Difficulty Must Be a Number" })
+            }
+            if (req.body.difficulty < 1) {
+                return res.status(400).json({ "error": "Difficulty Must Be Higher than 0" })
+            }
+        };   
+    
+        res.json(rows)
 
-
-    if (req.body.name) { bossData.name = req.body.name }
-    if (req.body.game) { bossData.game = req.body.game }
-    if (req.body.difficulty !== undefined) { bossData.difficulty = req.body.difficulty }
-
-    res.json(bossData)
+    } 
+    catch(error) {
+        throw error
+    }
 };
 
-const deleteBoss = (req,res) => {
+const deleteBoss = async (req,res) => {
     const bossId = Number(req.params.id);
-
+    
     if (isNaN(bossId)) {
         return res.status(400).json({ "error": "Boss ID must be valid"})
     };
 
-    const bossIndex = bosses.findIndex(boss => boss.id === bossId);
-
-    if (bossIndex === -1) {
-        return res.status(404).json({ "error": "Boss Does Not Exist" })
-    };
-
-    const deletedBoss = bosses.splice(bossIndex, 1);
-
-    res.json(deletedBoss[0]);
+    try {
+        const results = await pool.query('DELETE FROM bosses where id = $1 RETURNING *', [bossId])
+        rows = results.rows
+        res.json(rows);
+    }
+    catch(error) {
+        throw error
+    }
 };
 
 
