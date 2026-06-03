@@ -31,7 +31,11 @@ const getBoss = async (req,res) => {
         res.status(200).json(bossData);
 
     } catch (error) {
-        throw error
+        console.error(error);
+
+        return res.status(500).json({
+            error: "Internal Server Error"
+        })
     }
         
 };
@@ -39,25 +43,32 @@ const getBoss = async (req,res) => {
 const getBossById = async (req,res) => {
     const bossId  = Number(req.params.id);
 
+
+
+    if  (isNaN(bossId)) {
+        return res.status(400).json({ "error": "Invalid Boss Id" })
+    };
+
+    
     try {
         const results = await pool.query('SELECT * FROM bosses WHERE id = $1', [ bossId ])
         const rows = results.rows
-        const data = rows
        
-        if  (isNaN(bossId)) {
-            return res.status(400).json({ "error": "Invalid Boss Id" })
-        };
         
         
     
-        if (!data) {
+        if (rows.length === 0) {
             return res.status(404).json({ "error": "Boss Not Found" })
         };
     
-        res.json(data);
+        res.json(rows[0]);
         
     } catch (error) {
-        throw error
+        console.error(error);
+
+        return res.status(500).json({
+            error: "Internal Server Error"
+        })
     }
 
 };
@@ -75,7 +86,11 @@ const addBoss = async (req,res) => {
         res.status(201).json(rows);
     }
     catch (error) {
-        throw error
+        console.error(error);
+
+        return res.status(500).json({
+            error: "Internal Server Error"
+        })
     }
 };
 
@@ -83,6 +98,20 @@ const addBoss = async (req,res) => {
 const updateBoss = async (req,res) => {
     const bossId  = Number(req.params.id);
     const { name, game, difficulty } = req.body
+    
+    if (!name && !game && !difficulty ) {
+        return res.status(400).json({ "error": "Boss Details Incomplete" })
+    }; 
+    
+    if (difficulty !== undefined) {
+        if (typeof difficulty !== 'number') {
+            return res.status(400).json({ "error": "Difficulty Must Be a Number" })
+        }
+        if (difficulty < 1) {
+            return res.status(400).json({ "error": "Difficulty Must Be Higher than 0" })
+        }
+    }; 
+    
     
     try {
         const results = await pool.query('UPDATE bosses SET name = $1, game = $2, difficulty = $3 WHERE id = $4 RETURNING *', [
@@ -94,28 +123,20 @@ const updateBoss = async (req,res) => {
 
         const rows = results.rows
 
-        if (rows === undefined) {
+        if (rows.length === 0) {
             return res.status(404).json({ "error": "Could Not Find Boss" })
         };
     
-        if (!req.body.name && !req.body.game && !req.body.difficulty ) {
-            return res.status(400).json({ "error": "Boss Details Incomplete" })
-        }; 
-        
-        if (req.body.difficulty !== undefined) {
-            if (typeof req.body.difficulty !== 'number') {
-                return res.status(400).json({ "error": "Difficulty Must Be a Number" })
-            }
-            if (req.body.difficulty < 1) {
-                return res.status(400).json({ "error": "Difficulty Must Be Higher than 0" })
-            }
-        };   
     
-        res.json(rows)
+        res.json(rows[0])
 
     } 
     catch(error) {
-        throw error
+        console.error(error);
+
+        return res.status(500).json({
+            error: "Internal Server Error"
+        })
     }
 };
 
@@ -128,11 +149,15 @@ const deleteBoss = async (req,res) => {
 
     try {
         const results = await pool.query('DELETE FROM bosses where id = $1 RETURNING *', [bossId])
-        rows = results.rows
+        const rows = results.rows
         res.json(rows);
     }
     catch(error) {
-        throw error
+        console.error(error);
+
+        return res.status(500).json({
+            error: "Internal Server Error"
+        })
     }
 };
 
