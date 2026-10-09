@@ -5,7 +5,7 @@ const bossesController = require('../controllers/bossesController');
 
 router.get('/', bossesController.getHomepage);
 
-router.get('/bosses', bossesController.getBoss);
+router.get('/bosses', bossesController.getBosses);
 
 router.get('/bosses/:id', bossesController.getBossById);
 

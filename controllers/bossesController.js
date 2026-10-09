@@ -7,26 +7,10 @@ const getHomepage = (req,res) => {
     message: "Hello Souls Player"});
 };
 
-const getBoss = async (req,res) => {
-    const game = (req.query.game);
-    const difficulty = (req.query.difficulty);
-    const sort = (req.query.sort);
-
+const getBosses = async (req,res) => {
     try {
         const results = await pool.query('SELECT * FROM bosses');
-        const rows = results.rows
-        let bossData = rows
-        if (game) {
-            bossData = bossData.filter(boss => boss.game === game)
-        }; 
-        
-        if (difficulty) {
-            bossData = bossData.filter(boss => boss.difficulty == difficulty)
-        };
-        
-        if (sort) {
-            bossData = [...bossData].sort((a, b) => (b.difficulty - a.difficulty))
-        };
+        const bossData = results.rows
         
         res.status(200).json(bossData);
 
@@ -43,25 +27,25 @@ const getBoss = async (req,res) => {
 const getBossById = async (req,res) => {
     const bossId  = Number(req.params.id);
 
-
-
-    if  (isNaN(bossId)) {
-        return res.status(400).json({ "error": "Invalid Boss Id" })
-    };
-
+    if (!Number.isInteger(bossId) || bossId < 1) {
+        return res.status(400).json({ "error": "Invalid Boss Id"})
+    }
     
     try {
         const results = await pool.query('SELECT * FROM bosses WHERE id = $1', [ bossId ])
-        const rows = results.rows
-       
-        
-        
-    
-        if (rows.length === 0) {
+        const bossRows = results.rows
+
+        if (bossRows.length === 0) {
             return res.status(404).json({ "error": "Boss Not Found" })
         };
-    
-        res.json(rows[0]);
+
+        const defenceResults = await pool.query('SELECT * FROM boss_defences WHERE boss_id = $1', [ bossId ])
+        const defenceRows = defenceResults.rows 
+        
+        res.json( {
+            boss: bossRows[0],
+            defences: defenceRows
+        } );
         
     } catch (error) {
         console.error(error);
@@ -74,16 +58,107 @@ const getBossById = async (req,res) => {
 };
 
 const addBoss = async (req,res) => {
-    if (req.body.name == null || req.body.game == null || req.body.difficulty == null) {
-        return res.status(400).json({ "error": "Incomplete Boss Data" })
-    };
+    //nullish coalescing operator: if req.body exists then use it, if not use empty object
+    const body = req.body ?? {};
 
-    const { name, game, difficulty } = req.body
+    const { name, game_id, dlc_id, area, health, picture, souls, phase } = body
+    const { defences } = body
+    
+    if (typeof name !==  'string' || name.trim() == "") {
+        return res.status(400).json({ "error": "Invalid boss name" })
+    }
+
+     if (!Number.isInteger(game_id) || game_id < 1) {
+        return res.status(400).json({ "error": "Invalid game Id"})
+    }
+
+    if (typeof area !==  'string' || area.trim() == "") {
+        return res.status(400).json({ "error": "Invalid boss area" })
+    }
+
+    if (!Number.isInteger(health) || health < 1) {
+        return res.status(400).json({ "error": "Invalid boss health"})
+    }
+
+    if (typeof picture !==  'string' || picture.trim() == "") {
+        return res.status(400).json({ "error": "Invalid boss picture" })
+    }
+
+    if (!Number.isInteger(souls) || souls < 1) {
+        return res.status(400).json({ "error": "Invalid boss souls"})
+    }
+
+    if ((!Number.isInteger(dlc_id) || dlc_id < 1) && dlc_id !== null ) {
+        return res.status(400).json({ "error": "Invalid dlc id" })
+    }
+
+    if (typeof phase !== 'string' && phase !== null) {
+        return res.status(400).json({ "error": "Invalid phase" })
+    }
+
+    if (typeof defences !== 'object' || defences === null || Array.isArray(defences)) {
+        return res.status(400).json({ "error": "Invalid defences object" })
+    }
+
+    const damageTypes = [
+        'Physical',
+        'Slash',
+        'Strike',
+        'Thrust',
+        'Magic',
+        'Fire',
+        'Lightning',
+        'Poison',
+        'Toxic',
+        'Bleed'
+    ]    
+
+    for (const damageType of damageTypes) {
+        if ((!Number.isInteger(defences[damageType]) || defences[damageType] < 0) && defences[damageType] !== 'Immune') {
+            return res.status(400).json({ "error": "Invalid defence" })
+        }
+    }
+
     try {
-        const results = await pool.query('INSERT into bosses (name, game, difficulty) VALUES ($1, $2, $3) RETURNING *', [name, game, difficulty])
-        const rows = results.rows
+        const BossResults = await pool.query(`INSERT into bosses (name, game_id, dlc_id, area, health, picture, souls, phase) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [   name,
+                game_id,
+                dlc_id,
+                area,
+                health,
+                picture,
+                souls,
+                phase
+            ])
+            
+            const bossId = BossResults.rows[0].id
+            const bossDefences = []
+
+            for (const damageType of damageTypes) {
+                let immune = false
+                let defenceValue = defences[damageType]
+                
+                if (defenceValue === 'Immune') {
+                    immune = true
+                    defenceValue = null
+                };
+                
+                const defenceResults = await pool.query(
+                    `INSERT into boss_defences (boss_id, damage_type, defence, is_immune)
+                    VALUES ($1, $2, $3, $4) RETURNING *`,
+                    [ bossId, damageType, defenceValue, immune ]
+                )
+                bossDefences.push(defenceResults.rows[0])
+            }
+
+        const BossRows = BossResults.rows
         
-        res.status(201).json(rows);
+        res.status(201).json({
+            InsertedBoss: BossRows[0],
+            InsertedDefences: bossDefences
+        
+        });
     }
     catch (error) {
         console.error(error);
@@ -96,41 +171,117 @@ const addBoss = async (req,res) => {
 
 
 const updateBoss = async (req,res) => {
+    //nullish coalescing operator
+    const body = req.body ?? {};
+
     const bossId  = Number(req.params.id);
-    const { name, game, difficulty } = req.body
+    const { name, game_id, dlc_id, area, health, picture, souls, phase } = body
+    const { defences } = body
     
-    if (!name && !game && !difficulty ) {
-        return res.status(400).json({ "error": "Boss Details Incomplete" })
-    }; 
-    
-    if (difficulty !== undefined) {
-        if (typeof difficulty !== 'number') {
-            return res.status(400).json({ "error": "Difficulty Must Be a Number" })
+    if  (!Number.isInteger(bossId) || bossId < 1) {
+        return res.status(400).json({ "error": "Invalid Boss Id" })
+    };
+
+    if (typeof name !==  'string' || name.trim() == "") {
+        return res.status(400).json({ "error": "Invalid boss name" })
+    }
+
+     if (!Number.isInteger(game_id) || game_id < 1) {
+        return res.status(400).json({ "error": "Invalid game Id"})
+    }
+
+    if (typeof area !==  'string' || area.trim() == "") {
+        return res.status(400).json({ "error": "Invalid boss area" })
+    }
+
+    if (!Number.isInteger(health) || health < 1) {
+        return res.status(400).json({ "error": "Invalid boss health"})
+    }
+
+    if (typeof picture !==  'string' || picture.trim() == "") {
+        return res.status(400).json({ "error": "Invalid boss picture" })
+    }
+
+    if (!Number.isInteger(souls) || souls < 1) {
+        return res.status(400).json({ "error": "Invalid boss souls"})
+    }
+
+    if ((!Number.isInteger(dlc_id) || dlc_id < 1) && dlc_id !== null ) {
+        return res.status(400).json({ "error": "Invalid dlc id" })
+    }
+
+    if (typeof phase !== 'string' && phase !== null) {
+        return res.status(400).json({ "error": "Invalid phase" })
+    }
+
+    if (typeof defences !== 'object' || defences === null || Array.isArray(defences)) {
+        return res.status(400).json({ "error": "Invalid defences object" })
+    }
+
+    const damageTypes = [
+        'Physical',
+        'Slash',
+        'Strike',
+        'Thrust',
+        'Magic',
+        'Fire',
+        'Lightning',
+        'Poison',
+        'Toxic',
+        'Bleed'
+    ]    
+
+    for (const damageType of damageTypes) {
+        if ((!Number.isInteger(defences[damageType]) || defences[damageType] < 0) && defences[damageType] !== 'Immune') {
+            return res.status(400).json({ "error": "Invalid defence" })
         }
-        if (difficulty < 1) {
-            return res.status(400).json({ "error": "Difficulty Must Be Higher than 0" })
-        }
-    }; 
-    
-    
+    }
+
     try {
-        const results = await pool.query('UPDATE bosses SET name = $1, game = $2, difficulty = $3 WHERE id = $4 RETURNING *', [
-            name,
-            game,
-            difficulty,
-            bossId
-        ])
+        const BossResults = await pool.query(`UPDATE bosses SET name = $1, game_id = $2, dlc_id = $3, area = $4, health = $5,
+            picture = $6, souls = $7, phase = $8 WHERE id = $9 RETURNING *`,
+            [   name,
+                game_id,
+                dlc_id,
+                area,
+                health,
+                picture,
+                souls,
+                phase,
+                bossId
+            ])
+            
+            const bossRows = BossResults.rows
+            
+            if (bossRows.length === 0) {
+                return res.status(404).json({ "error": "Could Not Find Boss" })
+            };    
 
-        const rows = results.rows
+        const bossDefences = []
 
-        if (rows.length === 0) {
-            return res.status(404).json({ "error": "Could Not Find Boss" })
-        };
-    
-    
-        res.json(rows[0])
+        for (const damageType of damageTypes ) {
+            let immune = false
+            let defenceValue = defences[damageType]
+            
+            if (defenceValue === "Immune") {
+                immune = true
+                defenceValue = null
+            }
 
-    } 
+            const defenceResults = await pool.query(`UPDATE boss_defences SET
+                defence = $1, is_immune = $2 WHERE boss_id = $3 AND damage_type = $4 RETURNING *`,
+                [ defenceValue, immune, bossId, damageType ]
+                
+                )
+                bossDefences.push(defenceResults.rows[0])
+            }
+        
+        
+        res.status(200).json({
+            UpdatedBoss: bossRows[0],
+            UpdatedDefences: bossDefences
+        });
+    }
     catch(error) {
         console.error(error);
 
@@ -143,14 +294,27 @@ const updateBoss = async (req,res) => {
 const deleteBoss = async (req,res) => {
     const bossId = Number(req.params.id);
     
-    if (isNaN(bossId)) {
-        return res.status(400).json({ "error": "Boss ID must be valid"})
+    if  (!Number.isInteger(bossId) || bossId < 1) {
+        return res.status(400).json({ "error": "Invalid Boss Id" })
     };
 
     try {
-        const results = await pool.query('DELETE FROM bosses where id = $1 RETURNING *', [bossId])
-        const rows = results.rows
-        res.json(rows);
+        const defenceResults = await pool.query(`DELETE FROM boss_defences
+            WHERE boss_id = $1 RETURNING *`, [ bossId ])
+
+        const BossResults = await pool.query(`DELETE FROM bosses
+            WHERE id = $1 RETURNING *`, [ bossId ])
+
+        const bossRows = BossResults.rows
+
+        if (bossRows.length === 0) {
+                return res.status(404).json({ "error": "Could Not Find Boss" })
+        };
+
+        res.json({
+            deletedBoss: bossRows[0],
+            deletedDefences: defenceResults.rows
+        });
     }
     catch(error) {
         console.error(error);
@@ -161,8 +325,6 @@ const deleteBoss = async (req,res) => {
     }
 };
 
-
-
-module.exports = { getHomepage, getBoss, getBossById, addBoss, updateBoss,
+module.exports = { getHomepage, getBosses, getBossById, addBoss, updateBoss,
     deleteBoss
  } ;
